@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Cloud Benchmark</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
+.header{text-align:center;padding:20px 16px 8px}
+.header h1{font-size:1.5rem;background:linear-gradient(90deg,#00d2ff,#7b2ff7);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{color:#888;font-size:.8rem;margin-top:4px}
+.stats{display:flex;justify-content:center;gap:20px;padding:10px;font-size:.75rem;color:#888;border-bottom:1px solid #2a2a4a}
+.stats strong{color:#4ecdc4}
+.grid{display:grid;grid-template-columns:1fr;gap:10px;padding:12px;max-width:900px;margin:0 auto}
+@media(min-width:768px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:1100px){.grid{grid-template-columns:repeat(3,1fr)}}
+.card{background:#16213e;border:1px solid #2a2a4a;border-radius:12px;padding:14px}
+.card h2{font-size:1rem;color:#fff;margin-bottom:4px}
+.card .desc{font-size:.7rem;color:#666;margin-bottom:8px}
+.card .caps{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
+.cap{font-size:.6rem;padding:2px 6px;border-radius:8px;background:#00d2ff22;color:#00d2ff}
+.cap.thinking{background:#ff6b6b22;color:#ff6b6b}
+.cap.vision{background:#4ecdc422;color:#4ecdc4}
+.cap.audio{background:#ffd93d22;color:#ffd93d}
+.row{display:flex;justify-content:space-between;padding:4px 0;font-size:.8rem}
+.row .label{color:#888}
+.row .val{color:#fff;font-weight:600}
+.row .val.good{color:#4ecdc4}
+.row .val.mid{color:#ffd93d}
+.row .val.bad{color:#ff6b6b}
+.btn{width:100%;margin-top:8px;padding:7px;border:1px solid #00d2ff44;background:transparent;color:#00d2ff;border-radius:8px;cursor:pointer;font-size:.8rem}
+.btn:hover{background:#00d2ff22}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.progress{width:100%;height:3px;background:#1a1a3e;border-radius:2px;margin-top:6px;overflow:hidden;display:none}
+.progress.active{display:block}
+.progress-bar{height:100%;background:linear-gradient(90deg,#00d2ff,#7b2ff7);animation:pulse 1.5s infinite;width:100%}
+@keyframes pulse{0%{width:0}50%{width:70%}100%{width:100%}}
+.top-btns{display:flex;gap:8px;justify-content:center;padding:8px 12px}
+.top-btns button{background:linear-gradient(135deg,#00d2ff,#7b2ff7);border:none;color:#fff;padding:8px 16px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.85rem}
+.top-btns button:disabled{opacity:.5;cursor:not-allowed}
+.error{color:#ff6b6b;font-size:.7rem;margin-top:4px}
+</style>
+</head>
+<body>
+<div class="header">
+<h1>⚡ LLM Cloud Benchmark</h1>
+<p>Ollama Cloud · Testea modelos en tiempo real</p>
+</div>
+<div class="stats">
+<span>Modelos: <strong id="totalModels">0</strong></span>
+<span>Probados: <strong id="testedModels">0</strong></span>
+<span>Latencia media: <strong id="avgLatency">—</strong></span>
+<span>Último test: <strong id="lastTest">—</strong></span>
+</div>
+<div class="top-btns">
+<button onclick="testAll()">🧪 Testear Todos</button>
+<button onclick="testModels(['kimi-k2.5','glm-5.1'])">⭐ KIMI + GLM-5.1</button>
+</div>
+<div class="grid" id="grid"></div>
+
+<script>
+const MODELS = [
+  {id:'kimi-k2.5',name:'Kimi K2.5',size:'—',caps:['vision','tools','thinking'],desc:'Multimodal agentic'},
+  {id:'glm-5.1',name:'GLM-5.1',size:'45K ctx',caps:['tools','thinking'],desc:'Flagship agentic, #1 SWE-Bench Pro'},
+  {id:'glm-5',name:'GLM-5',size:'744b MoE',caps:['tools','thinking'],desc:'MoE 40B active, reasoning'},
+  {id:'glm-4.7',name:'GLM-4.7',size:'—',caps:['tools','thinking'],desc:'Coding capability'},
+  {id:'gpt-oss:120b',name:'GPT-OSS 120B',size:'120b',caps:['tools','thinking'],desc:'OpenAI open-weight reasoning'},
+  {id:'gpt-oss:20b',name:'GPT-OSS 20B',size:'20b',caps:['tools','thinking'],desc:'OpenAI open-weight lightweight'},
+  {id:'gpt-oss-safeguard:120b',name:'GPT-OSS Safeguard',size:'120b',caps:['tools','thinking'],desc:'Safety reasoning'},
+  {id:'qwen3.5:122b',name:'Qwen 3.5 122B',size:'122b',caps:['vision','tools','thinking'],desc:'Multimodal, most popular'},
+  {id:'qwen3.5:27b',name:'Qwen 3.5 27B',size:'27b',caps:['vision','tools','thinking'],desc:'Efficient multimodal'},
+  {id:'qwen3-next:80b',name:'Qwen 3-Next 80B',size:'80b',caps:['tools','thinking'],desc:'Efficient + fast inference'},
+  {id:'qwen3-coder-next',name:'Qwen3 Coder Next',size:'—',caps:['tools'],desc:'Coding-focused agentic'},
+  {id:'gemma4:31b',name:'Gemma 4 31B',size:'31b',caps:['vision','tools','thinking','audio'],desc:'Frontier multimodal + audio'},
+  {id:'gemma4:26b',name:'Gemma 4 26B',size:'26b',caps:['vision','tools','thinking','audio'],desc:'Multimodal balanced'},
+  {id:'minimax-m2.7',name:'MiniMax M2.7',size:'—',caps:['tools','thinking'],desc:'Coding + agentic workflows'},
+  {id:'minimax-m2.5',name:'MiniMax M2.5',size:'—',caps:['tools','thinking'],desc:'Productivity + coding'},
+  {id:'devstral-small-2',name:'Devstral Small 2',size:'24b',caps:['vision','tools'],desc:'Codebase exploration + SWE'},
+  {id:'devstral-2',name:'Devstral 2',size:'123b',caps:['tools'],desc:'Large code agent'},
+  {id:'nemotron-3-super',name:'Nemotron 3 Super',size:'120b',caps:['tools','thinking'],desc:'NVIDIA MoE 12B active'},
+  {id:'nemotron-3-nano:30b',name:'Nemotron 3 Nano 30B',size:'30b',caps:['tools','thinking'],desc:'Efficient agentic'},
+  {id:'nemotron-3-nano:4b',name:'Nemotron 3 Nano 4B',size:'4b',caps:['tools','thinking'],desc:'Tiny agentic'},
+  {id:'deepseek-v3.2',name:'DeepSeek V3.2',size:'—',caps:['tools','thinking'],desc:'Efficient reasoning'},
+  {id:'gemini-3-flash-preview',name:'Gemini 3 Flash',size:'—',caps:['vision','tools','thinking'],desc:'Speed + low cost'},
+  {id:'cogito-2.1',name:'Cogito 2.1',size:'671b',caps:[],desc:'MIT license, 671B params'},
+  {id:'ministral-3:14b',name:'Ministral 3 14B',size:'14b',caps:['vision','tools'],desc:'Edge deployment'},
+  {id:'rnj-1:8b',name:'RNJ-1 8B',size:'8b',caps:['tools'],desc:'Code + STEM'},
+];
+
+const TEST_PROMPT = "Explain the difference between TCP and UDP in 3 sentences.";
+let results = {};
+let testing = false;
+let queue = [];
+
+function fmt(ms) {
+  if (!ms) return '—';
+  return ms < 1000 ? ms+'ms' : (ms/1000).toFixed(1)+'s';
+}
+function cls(ms) {
+  if (!ms) return '';
+  return ms < 3000 ? 'good' : ms < 8000 ? 'mid' : 'bad';
+}
+
+function render() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = MODELS.map(m => {
+    const r = results[m.id] || {};
+    const err = r.error;
+    return `<div class="card">
+      <h2>${m.name}</h2>
+      <div class="desc">${m.desc}</div>
+      <div class="caps">${m.caps.map(c=>`<span class="cap ${c}">${c}</span>`).join('')}${m.size!=='—'?`<span class="cap">${m.size}</span>`:''}</div>
+      <div class="row"><span class="label">⚡ Latencia (TTFB)</span><span class="val ${cls(r.latency)}">${fmt(r.latency)}</span></div>
+      <div class="row"><span class="label">🚀 Tokens/s</span><span class="val">${r.tokensPerSec?r.tokensPerSec.toFixed(1):'—'}</span></div>
+      <div class="row"><span class="label">📝 Tokens</span><span class="val">${r.totalTokens||'—'}</span></div>
+      <div class="row"><span class="label">⏱️ Tiempo total</span><span class="val">${fmt(r.totalTime)}</span></div>
+      <div class="row"><span class="label">🕐 Probado</span><span class="val" style="font-size:.65rem">${r.testedAt?new Date(r.testedAt).toLocaleTimeString():'—'}</span></div>
+      ${err?`<div class="error">❌ ${err}</div>`:''}
+      <div class="progress" id="prog-${m.id}"><div class="progress-bar"></div></div>
+      <button class="btn" id="btn-${m.id}" onclick="testOne('${m.id}')">🧪 Testear</button>
+    </div>`;
+  }).join('');
+
+  document.getElementById('totalModels').textContent = MODELS.length;
+  const tested = Object.keys(results).length;
+  document.getElementById('testedModels').textContent = tested;
+  const lats = Object.values(results).filter(r=>r.latency).map(r=>r.latency);
+  if (lats.length) document.getElementById('avgLatency').textContent = fmt(lats.reduce((a,b)=>a+b,0)/lats.length);
+}
+
+async function testOne(id) {
+  if (testing) return;
+  testing = true;
+  const prog = document.getElementById('prog-'+id);
+  const btn = document.getElementById('btn-'+id);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Testing...'; }
+  if (prog) prog.classList.add('active');
+  try {
+    const resp = await fetch('/api/test', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({model: id, prompt: TEST_PROMPT})
+    });
+    const data = await resp.json();
+    if (data.error) {
+      results[id] = {error: data.error, testedAt: Date.now()};
+    } else {
+      results[id] = {
+        latency: data.ttfb,
+        tokensPerSec: data.tokensPerSec,
+        totalTokens: data.totalTokens,
+        totalTime: data.totalTime,
+        testedAt: Date.now()
+      };
+    }
+    document.getElementById('lastTest').textContent = new Date().toLocaleTimeString();
+  } catch(e) {
+    results[id] = {error: e.message, testedAt: Date.now()};
+  }
+  if (prog) prog.classList.remove('active');
+  testing = false;
+  render();
+  saveResults();
+}
+
+async function testAll() {
+  for (const m of MODELS) {
+    await testOne(m.id);
+    await new Promise(r => setTimeout(r, 500));
+  }
+}
+
+async function testModels(ids) {
+  for (const id of ids) {
+    await testOne(id);
+    await new Promise(r => setTimeout(r, 500));
+  }
+}
+
+function loadResults() {
+  try { const s = localStorage.getItem('llm-bench'); if(s) results = JSON.parse(s); } catch(e){}
+}
+function saveResults() {
+  try { localStorage.setItem('llm-bench', JSON.stringify(results)); } catch(e){}
+}
+
+loadResults();
+render();
+</script>
+</body>
+</html>
