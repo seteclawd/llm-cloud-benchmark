@@ -1,5 +1,5 @@
 // Basic Auth mínimo para Cloudflare Workers.
-// Usuarios en el secreto AUTH_USERS, formato "usuario:contraseña,usuario:contraseña".
+// Usuarios en el secreto AUTH_USERS, formato "user:password,user:password".
 // Falla cerrado: sin secreto, nadie entra.
 
 const enc = new TextEncoder();

@@ -126,7 +126,7 @@ export default {
       try {
         body = await request.json();
       } catch {
-        return json({ error: "JSON inválido" }, 400);
+        return json({ error: "Invalid JSON" }, 400);
       }
       const model = MODELS.find((m) => m.id === body.model);
       if (!model) return json({ error: `Model not found: ${body.model}` }, 404);
