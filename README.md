@@ -1,6 +1,6 @@
 # ⚡ LLM Cloud Benchmark
 
-Real-time benchmark dashboard for testing LLM models via Ollama Cloud API.
+Real-time benchmark dashboard for testing LLM models via the Ollama Cloud API.
 
 ## Features
 
